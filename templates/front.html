@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selector de Área de Detección</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #eef2f3;
+            color: #333;
+            margin: 0;
+            padding: 40px;
+            overflow-y: auto; /* Permitir desplazamiento vertical */
+        }
+
+        .container {
+            max-width: 800px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            margin-bottom: 40px; /* Espacio entre contenedores */
+        }
+
+        h1 {
+            color: #007bff;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            font-weight: 600;
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+
+        input[type="file"] {
+            margin-top: 20px;
+            padding: 15px;
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            width: calc(100% - 40px);
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+            outline: none;
+        }
+
+        input[type="file"]:hover {
+            border-color: #0056b3;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+            margin-top: 20px;
+            border-radius: 8px;
+            width: 100%;
+            height: auto;
+        }
+
+        button {
+            padding: 12px 25px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+
+        button:hover {
+            background-color: #218838;
+            transform: translateY(-2px);
+        }
+
+        #loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 2;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .mosaic {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .mosaic img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: transform 0.3s;
+        }
+
+        .mosaic img:hover {
+            transform: scale(1.1);
+        }
+
+        /* Estilos del modal */
+        #modal {
+            display: none; /* Oculto por defecto */
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+        }
+
+        #modalContent {
+            position: relative;
+            margin: auto;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            max-width: 800px;
+            text-align: center;
+        }
+
+        #modalContent img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+
+        #modalClose {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        #modalMessage {
+            margin-top: 10px;
+            font-size: 1.5em;
+            color: #d9534f; /* Color rojo */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Selecciona el Área de Detección por carril</h1>
+        <h3>Piloto Foto-detección</h3>
+        <div class="button-container">
+            <button id="clearButton"><i class="fas fa-trash-alt"></i> Eliminar Imagen</button>
+            <button id="processButton"><i class="fas fa-check"></i> Procesar Imagen</button>
+        </div>
+        <input type="file" id="imageUpload" accept="image/*">
+        <canvas id="canvas"></canvas>
+        <div id="result" style="margin-top: 20px;"></div>
+    </div>
+    <div id="loading">
+        <div class="spinner"></div>
+        Identificando vehículos...
+    </div>
+    
+    <!-- Gráfico de estadísticas -->
+    <div class="container">
+        <h3>Estadísticas de Detección</h3>
+        <canvas id="statsChart"></canvas>
+    </div>
+
+    <!-- Mosaico de recortes -->
+    <div class="container">
+        <h3>Mosaico de Detecciones</h3>
+        <div class="mosaic" id="mosaicContainer"></div>
+    </div>
+
+    <!-- Modal para mostrar imagen completa -->
+    <div id="modal">
+        <div id="modalContent">
+            <span id="modalClose">&times;</span>
+            <img id="modalImage" src="" alt="Infractor Identificado">
+            <div id="modalMessage">Infractor identificado</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        const imageUpload = document.getElementById('imageUpload');
+        const loadingText = document.getElementById('loading');
+        const statsChartCtx = document.getElementById('statsChart').getContext('2d');
+        const mosaicContainer = document.getElementById('mosaicContainer');
+        const modal = document.getElementById('modal');
+        const modalImage = document.getElementById('modalImage');
+        const modalClose = document.getElementById('modalClose');
+        let img = new Image();
+        let points = [];
+        let imageDataUrl = '';
+        let vehicleCounts = { 'motocicleta': 0, 'auto': 0, 'bus': 0 };
+
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                img.src = e.target.result;
+                imageDataUrl = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            context.drawImage(img, 0, 0);
+            points = [];
+        };
+
+        canvas.addEventListener('click', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left) * (img.width / canvas.width);
+            const y = (event.clientY - rect.top) * (img.height / canvas.height);
+            points.push({ x, y });
+
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(img, 0, 0);
+            drawSelection();
+        });
+
+        function drawSelection() {
+            if (points.length > 0) {
+                context.fillStyle = 'rgba(0, 255, 0, 0.3)';
+                context.beginPath();
+                context.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    context.lineTo(points[i].x, points[i].y);
+                }
+                context.closePath();
+                context.fill();
+            }
+
+            if (points.length > 1) {
+                context.strokeStyle = 'green';
+                context.lineWidth = 4;
+                context.beginPath();
+                context.moveTo(points[points.length - 2].x, points[points.length - 2].y);
+                context.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+                context.stroke();
+            }
+        }
+
+        document.getElementById('processButton').addEventListener('click', () => {
+            loadingText.style.display = 'flex';
+            setTimeout(() => {
+                const area = points.map(p => [p.x, p.y]);
+                fetch('/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ area, image: imageDataUrl }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    drawDetections(data);
+                    loadingText.style.display = 'none';
+                });
+            }, 1000);
+        });
+
+        function drawDetections(detections) {
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(img, 0, 0);
+
+            detections.forEach(detection => {
+                if (detection.confidence > 0.2) {
+                    const [x1, y1, x2, y2] = detection.bbox;
+
+                    let fillColor, strokeColor;
+                    switch (detection.class) {
+                        case 'motocicleta':
+                            fillColor = 'rgba(255, 0, 0, 0.3)';
+                            strokeColor = 'red';
+                            vehicleCounts.motocicleta++;
+                            break;
+                        case 'auto':
+                            fillColor = 'rgba(255, 255, 0, 0.3)';
+                            strokeColor = 'yellow';
+                            vehicleCounts.auto++;
+                            break;
+                        case 'bus':
+                            fillColor = 'rgba(0, 0, 255, 0.3)';
+                            strokeColor = 'blue';
+                            vehicleCounts.bus++;
+                            break;
+                        default:
+                            fillColor = 'rgba(255, 255, 0, 0.3)';
+                            strokeColor = 'yellow';
+                            break;
+                    }
+
+                    context.fillStyle = fillColor;
+                    context.fillRect(x1, y1, x2 - x1, y2 - y1);
+                    context.strokeStyle = strokeColor;
+                    context.lineWidth = 2;
+                    context.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                    context.fillStyle = strokeColor;
+                    context.font = '24px Arial';
+                    context.fillText(`Conf: ${detection.confidence.toFixed(2)} | Class: ${detection.class}`, x1, y1 > 10 ? y1 - 5 : 10);
+
+                    // Agregar recorte al mosaico
+                    addMosaicImage(x1, y1, x2 - x1, y2 - y1, detection.class);
+                }
+            });
+
+            drawSelection();
+            updateStatsChart();
+        }
+
+        function addMosaicImage(x, y, width, height, vehicleClass) {
+            const mosaicImg = document.createElement('img');
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempContext = tempCanvas.getContext('2d');
+
+            tempContext.drawImage(img, x, y, width, height, 0, 0, width, height);
+            mosaicImg.src = tempCanvas.toDataURL();
+            mosaicImg.alt = vehicleClass;
+
+            // Al hacer clic en el recorte, se abre el modal con el recorte específico
+            mosaicImg.addEventListener('click', () => {
+                modalImage.src = tempCanvas.toDataURL(); // Setea el recorte en el modal
+                modal.style.display = 'flex'; // Muestra el modal
+            });
+
+            mosaicContainer.appendChild(mosaicImg);
+        }
+
+        function updateStatsChart() {
+            const labels = Object.keys(vehicleCounts);
+            const data = Object.values(vehicleCounts);
+
+            const statsChart = new Chart(statsChartCtx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Número de vehículos detectados',
+                        data: data,
+                        backgroundColor: ['rgba(255, 0, 0, 0.5)', 'rgba(255, 255, 0, 0.5)', 'rgba(0, 0, 255, 0.5)'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Cantidad'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        document.getElementById('clearButton').addEventListener('click', () => {
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            img.src = '';
+            imageUpload.value = '';
+            points = [];
+            loadingText.style.display = 'none';
+            document.getElementById('result').textContent = '';
+            vehicleCounts = { 'motocicleta': 0, 'auto': 0, 'bus': 0 }; // Reiniciar contadores
+            mosaicContainer.innerHTML = ''; // Limpiar mosaico
+            if (statsChart) statsChart.destroy(); // Limpiar gráfico
+        });
+
+        modalClose.addEventListener('click', () => {
+            modal.style.display = 'none'; // Cierra el modal
+        });
+
+        window.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                modal.style.display = 'none'; // Cierra el modal si se hace clic fuera de él
+            }
+        });
+    </script>
+</body>
+</html>
